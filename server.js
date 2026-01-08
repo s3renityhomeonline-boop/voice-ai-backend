@@ -5,7 +5,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import { DeepgramService } from './services/deepgram.js'
 import { LLMService } from './services/llm.js'
-import { ElevenLabsService } from './services/elevenlabs.js'
+import { CartesiaService } from './services/cartesia.js'
 
 dotenv.config()
 
@@ -82,7 +82,7 @@ io.on('connection', (socket) => {
       conversationHistory: [],
       deepgram: null,
       llm: new LLMService(),
-      elevenlabs: new ElevenLabsService(),
+      cartesia: new CartesiaService(),
       isCallActive: false,
       lastActivity: Date.now()
     }
@@ -126,7 +126,7 @@ io.on('connection', (socket) => {
       socket.emit('ai-response', { text: greeting })
 
       // Generate and send greeting audio
-      const greetingAudio = await session.elevenlabs.textToSpeech(greeting)
+      const greetingAudio = await session.cartesia.textToSpeech(greeting)
       socket.emit('audio-response', greetingAudio)
 
     } catch (error) {
@@ -197,7 +197,7 @@ async function handleUserMessage(socket, session, userMessage) {
 
     // Generate and send audio response
     socket.emit('status', 'AI is speaking...')
-    const audioResponse = await session.elevenlabs.textToSpeech(aiResponse)
+    const audioResponse = await session.cartesia.textToSpeech(aiResponse)
     socket.emit('audio-response', audioResponse)
 
     socket.emit('status', 'Listening...')
