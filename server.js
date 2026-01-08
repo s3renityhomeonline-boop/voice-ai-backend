@@ -7,6 +7,7 @@ import { readFileSync, existsSync } from 'fs'
 import { DeepgramService } from './services/deepgram.js'
 import { LLMService } from './services/llm.js'
 import { CartesiaService } from './services/cartesia.js'
+import { SentenceDetector } from './utils/sentence-detector.js'
 
 dotenv.config()
 
@@ -133,7 +134,7 @@ io.on('connection', (socket) => {
       socket.emit('status', 'Connected - Start speaking!')
 
       // Send initial greeting
-      const greetingText = "Hey there! I'm Alex from Apex Solutions. I'm here to help you learn about our AI automation platform, answer questions about features and pricing, or schedule a demo with our team. What can I help you with today?"
+      const greetingText = "Hey there! I'm Tessa from Apex Solutions. I'm here to help you learn about our AI automation platform. What can I help you with today?"
       session.conversationHistory.push({ role: 'assistant', content: greetingText })
       socket.emit('ai-response', { text: greetingText })
 
@@ -201,7 +202,7 @@ io.on('connection', (socket) => {
   })
 })
 
-// Handle user message and generate AI response
+// Handle user message and generate AI response with streaming
 async function handleUserMessage(socket, session, userMessage) {
   try {
     // Add user message to conversation history
@@ -210,31 +211,101 @@ async function handleUserMessage(socket, session, userMessage) {
       content: userMessage
     })
 
-    // Generate AI response
     socket.emit('status', 'AI is thinking...')
-    const aiResponse = await session.llm.generateResponse(session.conversationHistory)
 
-    // Add AI response to conversation history
+    // Use sentence detector for streaming
+    const detector = new SentenceDetector()
+    let fullResponse = ''
+    let audioQueue = []
+    let isSpeaking = false
+
+    // Process LLM stream
+    for await (const chunk of session.llm.streamResponse(session.conversationHistory)) {
+      fullResponse += chunk
+
+      // Detect complete sentences
+      const sentences = detector.addChunk(chunk)
+
+      // Generate TTS for each complete sentence
+      for (const sentence of sentences) {
+        console.log(`📝 Complete sentence detected: "${sentence}"`)
+
+        // Send text immediately
+        socket.emit('ai-response', { text: sentence, partial: true })
+
+        // Generate audio in parallel
+        const audioPromise = session.cartesia.textToSpeech(sentence)
+          .then(audio => {
+            console.log(`🔊 Audio ready for: "${sentence.substring(0, 30)}..."`)
+            return { sentence, audio }
+          })
+          .catch(err => {
+            console.error('TTS error:', err)
+            return null
+          })
+
+        audioQueue.push(audioPromise)
+
+        // Start playing audio as soon as first sentence is ready
+        if (!isSpeaking) {
+          isSpeaking = true
+          socket.emit('status', 'AI is speaking...')
+          playAudioQueue(socket, audioQueue)
+        }
+      }
+    }
+
+    // Handle any remaining partial sentence
+    if (detector.hasIncomplete()) {
+      const remainder = detector.getRemainder()
+      if (remainder) {
+        console.log(`📝 Final fragment: "${remainder}"`)
+        fullResponse += remainder
+
+        socket.emit('ai-response', { text: remainder, partial: true })
+
+        const audioPromise = session.cartesia.textToSpeech(remainder)
+          .then(audio => ({ sentence: remainder, audio }))
+          .catch(err => {
+            console.error('TTS error:', err)
+            return null
+          })
+
+        audioQueue.push(audioPromise)
+      }
+    }
+
+    // Wait for all audio to be generated
+    await Promise.all(audioQueue)
+
+    // Add full response to conversation history
     session.conversationHistory.push({
       role: 'assistant',
-      content: aiResponse
+      content: fullResponse
     })
 
-    // Send text response
-    socket.emit('ai-response', { text: aiResponse })
+    // Send complete response marker
+    socket.emit('ai-response', { text: fullResponse, complete: true })
 
-    // Generate and send audio response
-    socket.emit('status', 'AI is speaking...')
-    const audioResponse = await session.cartesia.textToSpeech(aiResponse)
-    socket.emit('audio-response', audioResponse)
-
-    socket.emit('status', 'Listening...')
+    console.log(`✅ Complete response: "${fullResponse}"`)
 
   } catch (error) {
     console.error(`Error handling message [${socket.id}]:`, error)
     socket.emit('error', { message: 'Failed to generate response' })
     socket.emit('status', 'Error - Please try again')
   }
+}
+
+// Play audio queue as sentences become ready
+async function playAudioQueue(socket, audioQueue) {
+  for (const audioPromise of audioQueue) {
+    const result = await audioPromise
+    if (result && result.audio) {
+      socket.emit('audio-response', result.audio)
+    }
+  }
+
+  socket.emit('status', 'Listening...')
 }
 
 // Cleanup stale sessions every 5 minutes

@@ -55,7 +55,7 @@ ELEVENLABS_API_KEY=your_actual_key_here
 
 # Choose LLM provider
 LLM_PROVIDER=openai
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL=gpt-5-nano
 
 # Or use Gemini
 # LLM_PROVIDER=gemini
@@ -113,7 +113,7 @@ railway up
 | `GOOGLE_API_KEY` | Google AI API key | If using Gemini | `AIza...` |
 | `ELEVENLABS_API_KEY` | ElevenLabs API key | Yes | `xyz789...` |
 | `LLM_PROVIDER` | LLM to use (`openai` or `gemini`) | No (default: openai) | `openai` |
-| `OPENAI_MODEL` | OpenAI model name | No (default: gpt-4o-mini) | `gpt-4o-mini` |
+| `OPENAI_MODEL` | OpenAI model name | No (default: gpt-5-nano) | `gpt-5-nano` |
 | `GEMINI_MODEL` | Gemini model name | No (default: gemini-2.0-flash-exp) | `gemini-2.0-flash-exp` |
 | `ELEVENLABS_VOICE_ID` | ElevenLabs voice ID | No (default: Rachel) | `21m00Tcm4TlvDq8ikWAM` |
 
@@ -175,7 +175,7 @@ In your `.env` file:
 ```env
 LLM_PROVIDER=openai
 OPENAI_API_KEY=your_key
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL=gpt-5-nano
 ```
 
 **For Google Gemini:**

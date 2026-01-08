@@ -41,6 +41,7 @@
 
 ### 3. Shorter LLM Responses ⭐⭐
 **What changed:**
+- Model: gpt-4o-mini → **gpt-5-nano** (faster & cheaper)
 - Max tokens: 150 → **80 tokens**
 - Temperature: 0.7 → **0.8** (more natural variety)
 
