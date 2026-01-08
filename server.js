@@ -14,13 +14,23 @@ const httpServer = createServer(app)
 
 // Configure CORS for Socket.io and Express
 const corsOptions = {
-  origin: ['https://voicecallai.netlify.app', 'http://localhost:5173', 'http://localhost:3000'],
+  origin: [
+    'https://voicecallai.netlify.app',
+    'https://voice-ai-backend-production-7a80.up.railway.app',
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ],
   methods: ['GET', 'POST'],
-  credentials: true
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization']
 }
 
 const io = new Server(httpServer, {
-  cors: corsOptions
+  cors: corsOptions,
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  maxHttpBufferSize: 1e8, // 100 MB for audio streaming
+  transports: ['websocket', 'polling']
 })
 
 const PORT = process.env.PORT || 3001
@@ -50,7 +60,8 @@ io.on('connection', (socket) => {
       deepgram: null,
       llm: new LLMService(),
       elevenlabs: new ElevenLabsService(),
-      isCallActive: false
+      isCallActive: false,
+      lastActivity: Date.now()
     }
     activeSessions.set(socket.id, session)
   } catch (error) {
@@ -117,6 +128,7 @@ io.on('connection', (socket) => {
   socket.on('call-end', () => {
     console.log(`Call ended: ${socket.id}`)
     session.isCallActive = false
+    session.lastActivity = Date.now()
 
     if (session.deepgram) {
       session.deepgram.disconnect()
@@ -174,9 +186,32 @@ async function handleUserMessage(socket, session, userMessage) {
   }
 }
 
+// Cleanup stale sessions every 5 minutes
+setInterval(() => {
+  const now = Date.now()
+  let cleanedCount = 0
+
+  activeSessions.forEach((session, socketId) => {
+    // If session is inactive for more than 30 minutes, clean it up
+    if (!session.isCallActive && session.lastActivity && (now - session.lastActivity) > 30 * 60 * 1000) {
+      if (session.deepgram) {
+        session.deepgram.disconnect()
+      }
+      activeSessions.delete(socketId)
+      cleanedCount++
+    }
+  })
+
+  if (cleanedCount > 0) {
+    console.log(`🧹 Cleaned up ${cleanedCount} stale sessions`)
+  }
+}, 5 * 60 * 1000)
+
 // Start server
 httpServer.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`)
   console.log(`📡 WebSocket server ready`)
   console.log(`🤖 LLM Provider: ${process.env.LLM_PROVIDER || 'openai'}`)
+  console.log(`🌐 CORS enabled for: ${corsOptions.origin.join(', ')}`)
+  console.log(`✅ Server ready to accept connections`)
 })
