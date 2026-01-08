@@ -136,13 +136,23 @@ io.on('connection', (socket) => {
   })
 
   // Handle audio stream from client
+  let audioChunkCount = 0
   socket.on('audio-stream', async (audioData) => {
+    audioChunkCount++
+    if (audioChunkCount === 1) {
+      console.log(`📥 Receiving audio from client [${socket.id}]`)
+    }
+
     if (session.deepgram && session.isCallActive) {
       try {
         // Send audio to Deepgram for transcription
         session.deepgram.send(audioData)
       } catch (error) {
         console.error(`Error processing audio [${socket.id}]:`, error)
+      }
+    } else {
+      if (audioChunkCount === 1) {
+        console.warn(`⚠️ Received audio but call not active or Deepgram not ready`)
       }
     }
   })

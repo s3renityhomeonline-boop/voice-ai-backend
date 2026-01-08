@@ -11,20 +11,19 @@ export class DeepgramService {
     this.connection = null
     this.transcriptCallback = null
     this.errorCallback = null
+    this.audioSent = false
   }
 
   async connect() {
     try {
       console.log('Connecting to Deepgram...')
 
-      // Create live transcription connection with proper v3 SDK format
+      // Create live transcription connection - let Deepgram auto-detect format
       this.connection = this.client.listen.live({
         model: 'nova-2-general',
         language: 'en',
         punctuate: true,
-        smart_format: true,
-        encoding: 'linear16',
-        sample_rate: 16000
+        smart_format: true
       })
 
       // Setup event handlers
@@ -102,6 +101,11 @@ export class DeepgramService {
     try {
       if (this.connection && this.connection.getReadyState() === 1) {
         this.connection.send(audioData)
+        // Log first time audio is sent
+        if (!this.audioSent) {
+          console.log('📤 Started sending audio to Deepgram')
+          this.audioSent = true
+        }
       } else {
         console.warn('Deepgram connection not ready, state:', this.connection?.getReadyState())
       }
