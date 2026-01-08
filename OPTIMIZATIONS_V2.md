@@ -44,7 +44,7 @@
 - Model: gpt-4o-mini → **gpt-5-nano** (faster & cheaper with reasoning)
 - Max tokens: 150 → **500 max_completion_tokens** (accounts for reasoning + output)
 - Added **reasoning_effort: "low"** (minimal thinking for fast voice responses)
-- Temperature: 0.7 → **0.8** (more natural variety)
+- Temperature: Removed (GPT-5 uses default value of 1, not configurable)
 
 **Impact:**
 - ~60-70% faster LLM generation (gpt-5-nano + low reasoning)

@@ -23,7 +23,18 @@ max_tokens: 80  // ❌ Only measured visible output
 ```javascript
 max_completion_tokens: 500  // ✅ Covers reasoning + visible output
 reasoning_effort: 'low'      // ✅ Controls how much the model "thinks"
+// temperature: REMOVED       // ❌ Must use default (1) for GPT-5 models
+// top_p: REMOVED             // ❌ Must use default (1) for GPT-5 models
 ```
+
+### 3. Temperature & Top_P Locked
+
+**GPT-5 models do NOT support custom temperature or top_p values:**
+- ❌ `temperature: 0.8` will cause 400 BadRequestError
+- ✅ Must use default `temperature: 1` (don't specify it)
+- ✅ Must use default `top_p: 1` (don't specify it)
+
+**Why?** GPT-5 models handle their own internal creativity and randomness during the reasoning phase. The model already varies its output naturally through its thinking process.
 
 ## Why 500 Tokens for Voice AI?
 
@@ -78,10 +89,10 @@ Setting `reasoning_effort: 'low'` tells GPT-5:
 const stream = await this.client.chat.completions.create({
   model: 'gpt-5-nano',
   messages: messages,
-  temperature: 0.8,
   max_completion_tokens: 500,
   reasoning_effort: 'low',
   stream: true
+  // NOTE: temperature removed - GPT-5 uses default (1) only
 })
 ```
 
@@ -90,10 +101,10 @@ const stream = await this.client.chat.completions.create({
 const completion = await this.client.chat.completions.create({
   model: 'gpt-5-nano',
   messages: messages,
-  temperature: 0.8,
   max_completion_tokens: 500,
   reasoning_effort: 'low',
   stream: false
+  // NOTE: temperature removed - GPT-5 uses default (1) only
 })
 ```
 
@@ -117,7 +128,16 @@ const completion = await this.client.chat.completions.create({
 
 ## Common Issues & Solutions
 
-### Issue 1: Empty Responses
+### Issue 1: Temperature Error (400 BadRequestError)
+```
+Error: Unsupported value: 'temperature' does not support 0.8 with this model.
+Only the default (1) value is supported.
+```
+
+**Cause:** GPT-5 models don't support custom temperature
+**Solution:** Remove `temperature` parameter entirely (let it default to 1)
+
+### Issue 2: Empty Responses
 ```
 Error: Response is empty or cut off
 ```
@@ -125,7 +145,7 @@ Error: Response is empty or cut off
 **Cause:** `max_completion_tokens` too low
 **Solution:** Increase to at least 400
 
-### Issue 2: Slow Responses
+### Issue 3: Slow Responses
 ```
 First audio plays after 2+ seconds
 ```
@@ -133,7 +153,7 @@ First audio plays after 2+ seconds
 **Cause:** `reasoning_effort` too high or missing
 **Solution:** Set to `'low'` for voice calls
 
-### Issue 3: Responses Too Long
+### Issue 4: Responses Too Long
 ```
 AI rambles for 5+ sentences
 ```

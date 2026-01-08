@@ -336,6 +336,7 @@ All existing environment variables remain the same. No new configuration require
 **GPT-5 Specific Configuration:**
 - `max_completion_tokens: 500` - Accounts for reasoning tokens + visible output
 - `reasoning_effort: "low"` - Minimizes internal thinking for faster voice responses
+- `temperature` - Removed (GPT-5 only supports default value of 1)
 - Note: GPT-5 series uses reasoning tokens (hidden thinking steps), so the old `max_tokens` parameter is deprecated
 
 Streaming is enabled by default for OpenAI provider. Gemini will continue using non-streaming mode.

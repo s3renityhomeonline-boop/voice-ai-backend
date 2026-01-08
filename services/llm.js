@@ -84,7 +84,6 @@ Voice conversation rules:
     const stream = await this.client.chat.completions.create({
       model: this.model,
       messages: messages,
-      temperature: 0.8,
       max_completion_tokens: 500,
       reasoning_effort: 'low',
       stream: true
@@ -124,7 +123,6 @@ Voice conversation rules:
     const completion = await this.client.chat.completions.create({
       model: this.model,
       messages: messages,
-      temperature: 0.8,
       max_completion_tokens: 500,
       reasoning_effort: 'low',
       stream: streaming
