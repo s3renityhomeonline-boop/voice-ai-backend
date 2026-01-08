@@ -85,7 +85,8 @@ Voice conversation rules:
       model: this.model,
       messages: messages,
       temperature: 0.8,
-      max_tokens: 80,
+      max_completion_tokens: 500,
+      reasoning_effort: 'low',
       stream: true
     })
 
@@ -124,7 +125,8 @@ Voice conversation rules:
       model: this.model,
       messages: messages,
       temperature: 0.8,
-      max_tokens: 80,
+      max_completion_tokens: 500,
+      reasoning_effort: 'low',
       stream: streaming
     })
 
