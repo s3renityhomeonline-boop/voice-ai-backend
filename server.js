@@ -14,29 +14,52 @@ const httpServer = createServer(app)
 
 // Configure CORS for Socket.io and Express
 const corsOptions = {
-  origin: [
-    'https://voicecallai.netlify.app',
-    'https://voice-ai-backend-production-7a80.up.railway.app',
-    'http://localhost:5173',
-    'http://localhost:3000'
-  ],
-  methods: ['GET', 'POST'],
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      'https://voicecallai.netlify.app',
+      'https://voice-ai-backend-production-7a80.up.railway.app',
+      'http://localhost:5173',
+      'http://localhost:3000'
+    ]
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true)
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true)
+    } else {
+      console.log('CORS blocked origin:', origin)
+      callback(null, false)
+    }
+  },
+  methods: ['GET', 'POST', 'OPTIONS'],
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Length', 'Content-Type'],
+  maxAge: 86400 // 24 hours
 }
 
 const io = new Server(httpServer, {
-  cors: corsOptions,
+  cors: {
+    origin: [
+      'https://voicecallai.netlify.app',
+      'https://voice-ai-backend-production-7a80.up.railway.app',
+      'http://localhost:5173',
+      'http://localhost:3000'
+    ],
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
   pingTimeout: 60000,
   pingInterval: 25000,
-  maxHttpBufferSize: 1e8, // 100 MB for audio streaming
-  transports: ['websocket', 'polling']
+  maxHttpBufferSize: 1e8,
+  transports: ['websocket', 'polling'],
+  allowEIO3: true
 })
 
 const PORT = process.env.PORT || 3001
 
-// Middleware
+// Middleware - CORS must be first
 app.use(cors(corsOptions))
+app.options('*', cors(corsOptions)) // Handle preflight
 app.use(express.json())
 
 // Health check
@@ -212,6 +235,6 @@ httpServer.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`)
   console.log(`📡 WebSocket server ready`)
   console.log(`🤖 LLM Provider: ${process.env.LLM_PROVIDER || 'openai'}`)
-  console.log(`🌐 CORS enabled for: ${corsOptions.origin.join(', ')}`)
+  console.log(`🌐 CORS enabled for: https://voicecallai.netlify.app, https://voice-ai-backend-production-7a80.up.railway.app, http://localhost:5173, http://localhost:3000`)
   console.log(`✅ Server ready to accept connections`)
 })
