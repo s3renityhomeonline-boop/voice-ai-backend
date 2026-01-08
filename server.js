@@ -3,11 +3,23 @@ import { createServer } from 'http'
 import { Server } from 'socket.io'
 import cors from 'cors'
 import dotenv from 'dotenv'
+import { readFileSync, existsSync } from 'fs'
 import { DeepgramService } from './services/deepgram.js'
 import { LLMService } from './services/llm.js'
 import { CartesiaService } from './services/cartesia.js'
 
 dotenv.config()
+
+// Load pre-recorded greeting if exists (check for .wav or .mp3)
+let prerecordedGreeting = null
+const greetingPaths = ['./assets/greeting.wav', './assets/greeting.mp3']
+for (const path of greetingPaths) {
+  if (existsSync(path)) {
+    prerecordedGreeting = readFileSync(path).toString('base64')
+    console.log(`✅ Loaded pre-recorded greeting: ${path}`)
+    break
+  }
+}
 
 const app = express()
 const httpServer = createServer(app)
@@ -121,13 +133,19 @@ io.on('connection', (socket) => {
       socket.emit('status', 'Connected - Start speaking!')
 
       // Send initial greeting
-      const greeting = "Hello! I'm your AI assistant. How can I help you today?"
-      session.conversationHistory.push({ role: 'assistant', content: greeting })
-      socket.emit('ai-response', { text: greeting })
+      const greetingText = "Hey there! I'm Alex from Apex Solutions. I'm here to help you learn about our AI automation platform, answer questions about features and pricing, or schedule a demo with our team. What can I help you with today?"
+      session.conversationHistory.push({ role: 'assistant', content: greetingText })
+      socket.emit('ai-response', { text: greetingText })
 
-      // Generate and send greeting audio
-      const greetingAudio = await session.cartesia.textToSpeech(greeting)
-      socket.emit('audio-response', greetingAudio)
+      // Use pre-recorded greeting if available, otherwise generate with TTS
+      if (prerecordedGreeting) {
+        console.log('🎙️ Using pre-recorded greeting')
+        socket.emit('audio-response', prerecordedGreeting)
+      } else {
+        console.log('🤖 Generating greeting with Cartesia')
+        const greetingAudio = await session.cartesia.textToSpeech(greetingText)
+        socket.emit('audio-response', greetingAudio)
+      }
 
     } catch (error) {
       console.error(`Error starting call [${socket.id}]:`, error)

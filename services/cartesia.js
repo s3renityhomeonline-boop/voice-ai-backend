@@ -31,8 +31,8 @@ export class CartesiaService {
           },
           output_format: {
             container: 'wav',
-            encoding: 'pcm_f32le',
-            sample_rate: 44100
+            encoding: 'pcm_s16le',
+            sample_rate: 16000
           },
           speed: 'normal',
           generation_config: {
