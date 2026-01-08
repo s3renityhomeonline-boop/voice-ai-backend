@@ -216,8 +216,8 @@ async function handleUserMessage(socket, session, userMessage) {
     // Use sentence detector for streaming
     const detector = new SentenceDetector()
     let fullResponse = ''
-    let audioQueue = []
-    let isSpeaking = false
+    let sentenceQueue = []
+    let isProcessingAudio = false
 
     // Process LLM stream
     for await (const chunk of session.llm.streamResponse(session.conversationHistory)) {
@@ -226,31 +226,23 @@ async function handleUserMessage(socket, session, userMessage) {
       // Detect complete sentences
       const sentences = detector.addChunk(chunk)
 
-      // Generate TTS for each complete sentence
+      // Queue sentences for TTS processing
       for (const sentence of sentences) {
         console.log(`📝 Complete sentence detected: "${sentence}"`)
 
         // Send text immediately
         socket.emit('ai-response', { text: sentence, partial: true })
 
-        // Generate audio in parallel
-        const audioPromise = session.cartesia.textToSpeech(sentence)
-          .then(audio => {
-            console.log(`🔊 Audio ready for: "${sentence.substring(0, 30)}..."`)
-            return { sentence, audio }
-          })
-          .catch(err => {
-            console.error('TTS error:', err)
-            return null
-          })
+        // Add to sentence queue
+        sentenceQueue.push(sentence)
 
-        audioQueue.push(audioPromise)
-
-        // Start playing audio as soon as first sentence is ready
-        if (!isSpeaking) {
-          isSpeaking = true
+        // Start processing audio queue if not already started
+        if (!isProcessingAudio) {
+          isProcessingAudio = true
           socket.emit('status', 'AI is speaking...')
-          playAudioQueue(socket, audioQueue)
+          processAudioQueue(socket, session, sentenceQueue).catch(err => {
+            console.error('Error processing audio queue:', err)
+          })
         }
       }
     }
@@ -264,19 +256,18 @@ async function handleUserMessage(socket, session, userMessage) {
 
         socket.emit('ai-response', { text: remainder, partial: true })
 
-        const audioPromise = session.cartesia.textToSpeech(remainder)
-          .then(audio => ({ sentence: remainder, audio }))
-          .catch(err => {
-            console.error('TTS error:', err)
-            return null
-          })
-
-        audioQueue.push(audioPromise)
+        // Add to sentence queue
+        sentenceQueue.push(remainder)
       }
     }
 
-    // Wait for all audio to be generated
-    await Promise.all(audioQueue)
+    // Mark queue as complete
+    sentenceQueue.complete = true
+
+    // Wait for all audio to be processed
+    while (sentenceQueue.length > 0 || !sentenceQueue.processed) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
 
     // Add full response to conversation history
     session.conversationHistory.push({
@@ -296,16 +287,37 @@ async function handleUserMessage(socket, session, userMessage) {
   }
 }
 
-// Play audio queue as sentences become ready
-async function playAudioQueue(socket, audioQueue) {
-  for (const audioPromise of audioQueue) {
-    const result = await audioPromise
-    if (result && result.audio) {
-      socket.emit('audio-response', result.audio)
+// Process audio queue sequentially to avoid Cartesia concurrency limits
+async function processAudioQueue(socket, session, sentenceQueue) {
+  let processedCount = 0
+
+  while (true) {
+    // Check if there are sentences to process
+    if (sentenceQueue.length > processedCount) {
+      const sentence = sentenceQueue[processedCount]
+      processedCount++
+
+      try {
+        // Generate TTS sequentially (one at a time)
+        const audio = await session.cartesia.textToSpeech(sentence)
+        console.log(`🔊 Audio ready for: "${sentence.substring(0, 30)}..."`)
+
+        // Send audio immediately
+        socket.emit('audio-response', audio)
+      } catch (err) {
+        console.error('TTS error:', err)
+      }
+    } else if (sentenceQueue.complete) {
+      // All sentences processed
+      break
+    } else {
+      // Wait for more sentences
+      await new Promise(resolve => setTimeout(resolve, 50))
     }
   }
 
   socket.emit('status', 'Listening...')
+  sentenceQueue.processed = true
 }
 
 // Cleanup stale sessions every 5 minutes

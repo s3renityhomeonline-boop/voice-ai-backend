@@ -97,8 +97,8 @@ Updated `handleUserMessage()` function with streaming logic:
 async function handleUserMessage(socket, session, userMessage) {
   const detector = new SentenceDetector()
   let fullResponse = ''
-  let audioQueue = []
-  let isSpeaking = false
+  let sentenceQueue = []
+  let isProcessingAudio = false
 
   // Process LLM stream
   for await (const chunk of session.llm.streamResponse(conversationHistory)) {
@@ -107,29 +107,25 @@ async function handleUserMessage(socket, session, userMessage) {
     // Detect complete sentences
     const sentences = detector.addChunk(chunk)
 
-    // Generate TTS for each complete sentence
+    // Queue sentences for TTS processing
     for (const sentence of sentences) {
       // Send text immediately
       socket.emit('ai-response', { text: sentence, partial: true })
 
-      // Generate audio in parallel
-      const audioPromise = session.cartesia.textToSpeech(sentence)
-      audioQueue.push(audioPromise)
+      // Add to sentence queue
+      sentenceQueue.push(sentence)
 
-      // Start playing as soon as first sentence is ready
-      if (!isSpeaking) {
-        isSpeaking = true
+      // Start processing audio queue if not already started
+      if (!isProcessingAudio) {
+        isProcessingAudio = true
         socket.emit('status', 'AI is speaking...')
-        playAudioQueue(socket, audioQueue)
+        processAudioQueue(socket, session, sentenceQueue)
       }
     }
   }
 
-  // Handle remaining partial sentence
-  if (detector.hasIncomplete()) {
-    const remainder = detector.getRemainder()
-    // Generate TTS for remainder
-  }
+  // Mark queue as complete
+  sentenceQueue.complete = true
 
   // Send complete marker
   socket.emit('ai-response', { text: fullResponse, complete: true })
@@ -139,31 +135,46 @@ async function handleUserMessage(socket, session, userMessage) {
 **Flow:**
 1. Stream LLM tokens in real-time
 2. Detect sentence boundaries as tokens arrive
-3. Generate TTS for each sentence immediately
-4. Queue audio generation promises
-5. Start playback as soon as first audio is ready
-6. Continue generating subsequent sentences in parallel
+3. Add sentences to queue immediately
+4. Process TTS sequentially (one at a time)
+5. Send audio as each one completes
+6. Avoid Cartesia concurrency limits
 
-### 4. Audio Queue Player
+### 4. Audio Queue Processor
 
-Separate function to manage audio playback:
+Separate function to manage sequential TTS generation:
 
 ```javascript
-async function playAudioQueue(socket, audioQueue) {
-  for (const audioPromise of audioQueue) {
-    const result = await audioPromise
-    if (result && result.audio) {
-      socket.emit('audio-response', result.audio)
+async function processAudioQueue(socket, session, sentenceQueue) {
+  let processedCount = 0
+
+  while (true) {
+    if (sentenceQueue.length > processedCount) {
+      const sentence = sentenceQueue[processedCount]
+      processedCount++
+
+      // Generate TTS sequentially (one at a time)
+      const audio = await session.cartesia.textToSpeech(sentence)
+      socket.emit('audio-response', audio)
+    } else if (sentenceQueue.complete) {
+      break
+    } else {
+      await new Promise(resolve => setTimeout(resolve, 50))
     }
   }
+
   socket.emit('status', 'Listening...')
 }
 ```
 
 **Benefits:**
-- Non-blocking - doesn't wait for all audio before starting
-- Plays audio in order as it becomes ready
-- Error-tolerant - skips failed TTS generations
+- **Sequential processing** - avoids Cartesia concurrency limits (max 2)
+- **Stream-friendly** - processes sentences as they arrive
+- **Non-blocking** - doesn't wait for all sentences before starting
+- **Error-tolerant** - skips failed TTS generations
+
+**Why Sequential?**
+Cartesia has a concurrency limit of 2 requests. Processing TTS sequentially ensures we never hit this limit while still providing fast response times through sentence-level streaming.
 
 ## Frontend Updates (voice-ai-frontend)
 

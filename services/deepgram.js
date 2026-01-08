@@ -20,10 +20,12 @@ export class DeepgramService {
 
       // Create live transcription connection - let Deepgram auto-detect format
       this.connection = this.client.listen.live({
-        model: 'nova-2-general',
+        model: 'nova-3',
         language: 'en',
         punctuate: true,
-        smart_format: true
+        smart_format: true,
+        vad_events: true,
+        interim_results: false
       })
 
       // Setup event handlers
@@ -88,7 +90,7 @@ export class DeepgramService {
 
       if (error.message && error.message.includes('400')) {
         console.error('Deepgram 400 Error - Possible causes:')
-        console.error('1. Model "nova-2-general" not available on your plan')
+        console.error('1. Model "nova-3" not available on your plan')
         console.error('2. Invalid parameters for your tier')
         console.error('3. API key permissions issue')
       }
