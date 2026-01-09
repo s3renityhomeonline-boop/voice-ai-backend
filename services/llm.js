@@ -174,7 +174,10 @@ Voice conversation rules:
       generationConfig: {
         maxOutputTokens: 500,
         temperature: 1.0,
-        thinkingLevel: 'minimal' // Fast mode for low latency
+        // ✅ CORRECT NESTED STRUCTURE for Gemini 3
+        thinkingConfig: {
+          thinkingLevel: 'low' // Options: minimal, low, medium, high
+        }
       }
     })
 
@@ -233,7 +236,10 @@ Voice conversation rules:
       generationConfig: {
         maxOutputTokens: 500,
         temperature: 1.0,
-        thinkingLevel: 'minimal' // Fast mode for low latency
+        // ✅ CORRECT NESTED STRUCTURE for Gemini 3
+        thinkingConfig: {
+          thinkingLevel: 'low' // Options: minimal, low, medium, high
+        }
       }
     })
 
