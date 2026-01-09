@@ -135,7 +135,7 @@ io.on('connection', (socket) => {
 
       // Send initial greeting
       const greetingText = "Hey there! I'm Tessa from Apex Solutions. I'm here to help you learn about our AI automation platform. What can I help you with today?"
-      session.conversationHistory.push({ role: 'assistant', content: greetingText })
+      // DON'T add greeting to conversation history - Gemini requires history to start with user message
       socket.emit('ai-response', { text: greetingText })
 
       // Use pre-recorded greeting if available, otherwise generate with TTS

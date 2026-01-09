@@ -156,12 +156,21 @@ Voice conversation rules:
       systemInstruction: systemPrompt
     })
 
+    // 1. Map 'assistant' to 'model' and ensure correct structure
+    const mappedHistory = conversationHistory.slice(0, -1).map(msg => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }]
+    }))
+
+    // 2. Ensure it starts with a 'user' message (Gemini requirement)
+    // If the first message is from the model, remove it
+    while (mappedHistory.length > 0 && mappedHistory[0].role === 'model') {
+      mappedHistory.shift()
+    }
+
     // Convert conversation history to Gemini format
     const chat = model.startChat({
-      history: conversationHistory.slice(0, -1).map(msg => ({
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.content }]
-      })),
+      history: mappedHistory,
       generationConfig: {
         maxOutputTokens: 500,
         temperature: 1.0,
@@ -206,12 +215,21 @@ Voice conversation rules:
       systemInstruction: systemPrompt
     })
 
+    // 1. Map 'assistant' to 'model' and ensure correct structure
+    const mappedHistory = conversationHistory.slice(0, -1).map(msg => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }]
+    }))
+
+    // 2. Ensure it starts with a 'user' message (Gemini requirement)
+    // If the first message is from the model, remove it
+    while (mappedHistory.length > 0 && mappedHistory[0].role === 'model') {
+      mappedHistory.shift()
+    }
+
     // Convert conversation history to Gemini format
     const chat = model.startChat({
-      history: conversationHistory.slice(0, -1).map(msg => ({
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.content }]
-      })),
+      history: mappedHistory,
       generationConfig: {
         maxOutputTokens: 500,
         temperature: 1.0,
