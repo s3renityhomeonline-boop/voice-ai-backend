@@ -23,7 +23,7 @@ export class CartesiaService {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model_id: 'sonic-3',
+          model_id: 'sonic-turbo',
           transcript: text,
           voice: {
             mode: 'id',
@@ -33,11 +33,6 @@ export class CartesiaService {
             container: 'wav',
             encoding: 'pcm_s16le',
             sample_rate: 16000
-          },
-          speed: 'normal',
-          generation_config: {
-            speed: 1,
-            volume: 1.0
           }
         })
       })

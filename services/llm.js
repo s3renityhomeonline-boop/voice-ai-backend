@@ -31,7 +31,7 @@ export class LLMService {
     }
 
     this.client = new GoogleGenerativeAI(apiKey)
-    this.model = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
+    this.model = process.env.GEMINI_MODEL || 'gemini-3-flash'
   }
 
   async generateResponse(conversationHistory, streaming = false) {
@@ -52,9 +52,7 @@ export class LLMService {
     if (this.provider === 'openai') {
       yield* this.streamOpenAIResponse(conversationHistory)
     } else if (this.provider === 'gemini') {
-      // Fallback to non-streaming for Gemini
-      const response = await this.generateGeminiResponse(conversationHistory)
-      yield response
+      yield* this.streamGeminiResponse(conversationHistory)
     }
   }
 
@@ -135,9 +133,7 @@ Voice conversation rules:
     return completion.choices[0].message.content
   }
 
-  async generateGeminiResponse(conversationHistory) {
-    const model = this.client.getGenerativeModel({ model: this.model })
-
+  async *streamGeminiResponse(conversationHistory) {
     const systemPrompt = `You are Tessa, an AI assistant for Apex Solutions - an AI-powered business automation platform.
 
 Your role:
@@ -155,6 +151,11 @@ Voice conversation rules:
 - Be professional but warm and approachable
 - Ask clarifying questions when needed`
 
+    const model = this.client.getGenerativeModel({
+      model: this.model,
+      systemInstruction: systemPrompt
+    })
+
     // Convert conversation history to Gemini format
     const chat = model.startChat({
       history: conversationHistory.slice(0, -1).map(msg => ({
@@ -162,16 +163,66 @@ Voice conversation rules:
         parts: [{ text: msg.content }]
       })),
       generationConfig: {
-        maxOutputTokens: 80,
-        temperature: 0.8
+        maxOutputTokens: 500,
+        temperature: 1.0,
+        thinkingLevel: 'minimal' // Fast mode for low latency
       }
     })
 
     // Get the last user message
     const lastMessage = conversationHistory[conversationHistory.length - 1]
-    const prompt = `${systemPrompt}\n\nUser: ${lastMessage.content}`
 
-    const result = await chat.sendMessage(prompt)
+    // Stream the response
+    const result = await chat.sendMessageStream(lastMessage.content)
+
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text()
+      if (chunkText) {
+        yield chunkText
+      }
+    }
+  }
+
+  async generateGeminiResponse(conversationHistory) {
+    const systemPrompt = `You are Tessa, an AI assistant for Apex Solutions - an AI-powered business automation platform.
+
+Your role:
+- Help customers understand our platform features (workflow automation, AI analytics, team collaboration)
+- Answer pricing questions (Starter: $29/mo, Pro: $99/mo, Enterprise: custom)
+- Qualify leads by understanding their business needs
+- Schedule demos with our sales team
+- Provide friendly, efficient customer support
+
+Voice conversation rules:
+- Keep responses under 2-3 sentences (this is voice, not text)
+- Sound natural and conversational like a helpful human
+- If you don't know something specific, offer to connect them with the team
+- Remember customer details mentioned in the conversation
+- Be professional but warm and approachable
+- Ask clarifying questions when needed`
+
+    const model = this.client.getGenerativeModel({
+      model: this.model,
+      systemInstruction: systemPrompt
+    })
+
+    // Convert conversation history to Gemini format
+    const chat = model.startChat({
+      history: conversationHistory.slice(0, -1).map(msg => ({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: msg.content }]
+      })),
+      generationConfig: {
+        maxOutputTokens: 500,
+        temperature: 1.0,
+        thinkingLevel: 'minimal' // Fast mode for low latency
+      }
+    })
+
+    // Get the last user message
+    const lastMessage = conversationHistory[conversationHistory.length - 1]
+
+    const result = await chat.sendMessage(lastMessage.content)
     const response = await result.response
     return response.text()
   }

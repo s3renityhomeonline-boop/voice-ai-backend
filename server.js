@@ -216,8 +216,6 @@ async function handleUserMessage(socket, session, userMessage) {
     // Use sentence detector for streaming
     const detector = new SentenceDetector()
     let fullResponse = ''
-    let sentenceQueue = []
-    let isProcessingAudio = false
 
     // Process LLM stream
     for await (const chunk of session.llm.streamResponse(session.conversationHistory)) {
@@ -226,23 +224,20 @@ async function handleUserMessage(socket, session, userMessage) {
       // Detect complete sentences
       const sentences = detector.addChunk(chunk)
 
-      // Queue sentences for TTS processing
+      // Generate TTS for each complete sentence
       for (const sentence of sentences) {
         console.log(`📝 Complete sentence detected: "${sentence}"`)
 
         // Send text immediately
         socket.emit('ai-response', { text: sentence, partial: true })
 
-        // Add to sentence queue
-        sentenceQueue.push(sentence)
-
-        // Start processing audio queue if not already started
-        if (!isProcessingAudio) {
-          isProcessingAudio = true
+        // Generate and send audio
+        try {
           socket.emit('status', 'AI is speaking...')
-          processAudioQueue(socket, session, sentenceQueue).catch(err => {
-            console.error('Error processing audio queue:', err)
-          })
+          const audioResponse = await session.cartesia.textToSpeech(sentence)
+          socket.emit('audio-response', audioResponse)
+        } catch (err) {
+          console.error('TTS error:', err)
         }
       }
     }
@@ -256,17 +251,13 @@ async function handleUserMessage(socket, session, userMessage) {
 
         socket.emit('ai-response', { text: remainder, partial: true })
 
-        // Add to sentence queue
-        sentenceQueue.push(remainder)
+        try {
+          const audioResponse = await session.cartesia.textToSpeech(remainder)
+          socket.emit('audio-response', audioResponse)
+        } catch (err) {
+          console.error('TTS error:', err)
+        }
       }
-    }
-
-    // Mark queue as complete
-    sentenceQueue.complete = true
-
-    // Wait for all audio to be processed
-    while (sentenceQueue.length > 0 || !sentenceQueue.processed) {
-      await new Promise(resolve => setTimeout(resolve, 100))
     }
 
     // Add full response to conversation history
@@ -280,44 +271,13 @@ async function handleUserMessage(socket, session, userMessage) {
 
     console.log(`✅ Complete response: "${fullResponse}"`)
 
+    socket.emit('status', 'Listening...')
+
   } catch (error) {
     console.error(`Error handling message [${socket.id}]:`, error)
     socket.emit('error', { message: 'Failed to generate response' })
     socket.emit('status', 'Error - Please try again')
   }
-}
-
-// Process audio queue sequentially to avoid Cartesia concurrency limits
-async function processAudioQueue(socket, session, sentenceQueue) {
-  let processedCount = 0
-
-  while (true) {
-    // Check if there are sentences to process
-    if (sentenceQueue.length > processedCount) {
-      const sentence = sentenceQueue[processedCount]
-      processedCount++
-
-      try {
-        // Generate TTS sequentially (one at a time)
-        const audio = await session.cartesia.textToSpeech(sentence)
-        console.log(`🔊 Audio ready for: "${sentence.substring(0, 30)}..."`)
-
-        // Send audio immediately
-        socket.emit('audio-response', audio)
-      } catch (err) {
-        console.error('TTS error:', err)
-      }
-    } else if (sentenceQueue.complete) {
-      // All sentences processed
-      break
-    } else {
-      // Wait for more sentences
-      await new Promise(resolve => setTimeout(resolve, 50))
-    }
-  }
-
-  socket.emit('status', 'Listening...')
-  sentenceQueue.processed = true
 }
 
 // Cleanup stale sessions every 5 minutes
