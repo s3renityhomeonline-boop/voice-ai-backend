@@ -7,7 +7,6 @@ import { readFileSync, existsSync } from 'fs'
 import { DeepgramService } from './services/deepgram.js'
 import { LLMService } from './services/llm.js'
 import { CartesiaService } from './services/cartesia.js'
-import { SentenceDetector } from './utils/sentence-detector.js'
 
 dotenv.config()
 
@@ -135,7 +134,7 @@ io.on('connection', (socket) => {
 
       // Send initial greeting
       const greetingText = "Hey there! I'm Tessa from Apex Solutions. I'm here to help you learn about our AI automation platform. What can I help you with today?"
-      // DON'T add greeting to conversation history - Gemini requires history to start with user message
+      session.conversationHistory.push({ role: 'assistant', content: greetingText })
       socket.emit('ai-response', { text: greetingText })
 
       // Use pre-recorded greeting if available, otherwise generate with TTS
@@ -202,7 +201,7 @@ io.on('connection', (socket) => {
   })
 })
 
-// Handle user message and generate AI response with streaming
+// Handle user message and generate AI response
 async function handleUserMessage(socket, session, userMessage) {
   try {
     // Add user message to conversation history
@@ -211,65 +210,23 @@ async function handleUserMessage(socket, session, userMessage) {
       content: userMessage
     })
 
+    // Generate AI response
     socket.emit('status', 'AI is thinking...')
+    const aiResponse = await session.llm.generateResponse(session.conversationHistory)
 
-    // Use sentence detector for streaming
-    const detector = new SentenceDetector()
-    let fullResponse = ''
-
-    // Process LLM stream
-    for await (const chunk of session.llm.streamResponse(session.conversationHistory)) {
-      fullResponse += chunk
-
-      // Detect complete sentences
-      const sentences = detector.addChunk(chunk)
-
-      // Generate TTS for each complete sentence
-      for (const sentence of sentences) {
-        console.log(`📝 Complete sentence detected: "${sentence}"`)
-
-        // Send text immediately
-        socket.emit('ai-response', { text: sentence, partial: true })
-
-        // Generate and send audio
-        try {
-          socket.emit('status', 'AI is speaking...')
-          const audioResponse = await session.cartesia.textToSpeech(sentence)
-          socket.emit('audio-response', audioResponse)
-        } catch (err) {
-          console.error('TTS error:', err)
-        }
-      }
-    }
-
-    // Handle any remaining partial sentence
-    if (detector.hasIncomplete()) {
-      const remainder = detector.getRemainder()
-      if (remainder) {
-        console.log(`📝 Final fragment: "${remainder}"`)
-        fullResponse += remainder
-
-        socket.emit('ai-response', { text: remainder, partial: true })
-
-        try {
-          const audioResponse = await session.cartesia.textToSpeech(remainder)
-          socket.emit('audio-response', audioResponse)
-        } catch (err) {
-          console.error('TTS error:', err)
-        }
-      }
-    }
-
-    // Add full response to conversation history
+    // Add AI response to conversation history
     session.conversationHistory.push({
       role: 'assistant',
-      content: fullResponse
+      content: aiResponse
     })
 
-    // Send complete response marker
-    socket.emit('ai-response', { text: fullResponse, complete: true })
+    // Send text response
+    socket.emit('ai-response', { text: aiResponse })
 
-    console.log(`✅ Complete response: "${fullResponse}"`)
+    // Generate and send audio response
+    socket.emit('status', 'AI is speaking...')
+    const audioResponse = await session.cartesia.textToSpeech(aiResponse)
+    socket.emit('audio-response', audioResponse)
 
     socket.emit('status', 'Listening...')
 
