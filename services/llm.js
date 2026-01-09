@@ -31,7 +31,7 @@ export class LLMService {
     }
 
     this.client = new GoogleGenerativeAI(apiKey)
-    this.model = process.env.GEMINI_MODEL || 'gemini-3-flash'
+    this.model = process.env.GEMINI_MODEL || 'gemini-3-flash-preview'
   }
 
   async generateResponse(conversationHistory, streaming = false) {
